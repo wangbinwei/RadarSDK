@@ -46,7 +46,7 @@ public class Radar77gConfiguration implements InitializingBean {
     private RadarDataCallback<String> radarDataCallback;
 
     /**
-     * 启动Netty TCP服务器
+     * 启动Netty TCP服务器，初始化bean的时候调用
      * */
     @Override
     public void afterPropertiesSet() throws Exception {

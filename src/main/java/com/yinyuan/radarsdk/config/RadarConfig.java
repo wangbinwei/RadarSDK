@@ -1,6 +1,7 @@
 package com.yinyuan.radarsdk.config;
 
 import com.yinyuan.radarsdk.callback.RadarDataCallback;
+import com.yinyuan.radarsdk.handler.impl.PeopleCountServiceImpl;
 import com.yinyuan.radarsdk.handler.impl.Radar24gDataHandlerImpl;
 import com.yinyuan.radarsdk.handler.impl.Radar77gDataHandlerImpl;
 import com.yinyuan.radarsdk.pojo.RadarServerPort;
@@ -67,5 +68,10 @@ public interface RadarConfig {
     @Bean
     default Radar77gDataHandlerImpl radar77gDataHandlerImpl(){
         return new Radar77gDataHandlerImpl();
+    }
+
+    @Bean
+    default PeopleCountServiceImpl peopleCountServiceImpl(){
+        return new PeopleCountServiceImpl();
     }
 }

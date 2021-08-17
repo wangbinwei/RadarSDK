@@ -4,7 +4,9 @@ import com.alibaba.fastjson.JSONObject;
 import com.sirtrack.construct.lib.Containers;
 import com.yinyuan.radarsdk.callback.RadarDataCallback;
 import com.yinyuan.radarsdk.enums.RadarEnum;
+import com.yinyuan.radarsdk.handler.PeopleCountService;
 import com.yinyuan.radarsdk.handler.RadarDataHandler;
+import com.yinyuan.radarsdk.pojo.PeopleCount;
 import com.yinyuan.radarsdk.protocol.MmWave77;
 import com.yinyuan.radarsdk.util.ByteConvertUtil;
 import io.netty.buffer.ByteBuf;
@@ -16,7 +18,9 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.util.ReferenceCountUtil;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,6 +43,9 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
      * 回调接口，处理好的数据应该如何使用
      */
     private RadarDataCallback<String> callback;
+
+    @Autowired
+    private PeopleCountService peopleCountService;
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -209,10 +216,14 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
                         result.put("dataType", RadarEnum.Radar_77G);
                         result.put("sn", sn);
                         result.put("data", targetList);
+                        if(PeopleCountServiceImpl.ON_START == 1) {
+                            peopleCountService.insertData2List(new PeopleCount(targetCount,PeopleCountServiceImpl.START_TIME,sn, LocalDateTime.now()));
+                        }
+
                         //发送
                         if (callback != null){
                             JSONObject jsonResult = new JSONObject(result);
-                            callback.notify(jsonResult.toJSONString());
+                            callback.notify(jsonResult.toJSONString()); //发送通知
                         }
                     } catch (Exception e) {
                         e.printStackTrace();

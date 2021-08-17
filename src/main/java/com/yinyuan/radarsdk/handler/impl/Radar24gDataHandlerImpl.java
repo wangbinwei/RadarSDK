@@ -32,7 +32,7 @@ import static com.yinyuan.radarsdk.protocol.MmWave24.TARGET_PROPERTIES;
 public class Radar24gDataHandlerImpl extends ChannelInboundHandlerAdapter implements RadarDataHandler {
 
     /**
-     * 回调接口，处理好的数据应该如何使用
+     * 回调接口，处理好的数据应该如何使用，发送通知给回调的函数
      */
     private RadarDataCallback<String> callback;
 
