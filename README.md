@@ -1,3 +1,16 @@
+# 介绍
+
+该SDK功能，使用Netty起了一个TCP 服务器，接收雷达设备传输的数据。
+
+主要技术框架栈：
+
+- Netty
+- 回调函数
+
+# 流程图
+
+![radarSDK](G:\Spring Family\radar-sdk\README.assets\radarSDK.jpg)
+
 # 快速开始
 
 ## 1、打包

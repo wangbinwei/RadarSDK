@@ -43,7 +43,9 @@ public class RadarServer {
             bootstrap.group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel.class)
                     .option(ChannelOption.SO_BACKLOG, 1024)
+                    .option(ChannelOption.TCP_NODELAY, true)
                     .childOption(ChannelOption.SO_KEEPALIVE, true)
+                    .childOption(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(592048))
                     .childHandler(new ChannelInitializer<SocketChannel>() { //子通道由多个handler共同组成的管道，向管道中添加handler
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {

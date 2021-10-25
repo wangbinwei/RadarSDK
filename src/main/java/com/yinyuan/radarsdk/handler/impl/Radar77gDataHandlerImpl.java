@@ -21,10 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.sirtrack.construct.lib.Binary.byteArrayToHexString;
 import static com.sirtrack.construct.lib.Binary.hexStringToByteArray;
@@ -46,6 +44,8 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
 
     @Autowired
     private PeopleCountService peopleCountService;
+
+    public static final Map<String, ChannelHandlerContext> radarConfigMap = new ConcurrentHashMap<>();
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -73,23 +73,28 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
      */
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        ByteBuf contentBuf = null;
         try {
             FullHttpRequest request = (FullHttpRequest) msg;
             if(!request.decoderResult().equals(DecoderResult.SUCCESS)) {
-                log.warn("Radar 77G : A decoding error occurred in the received HTTP request");
-                return;
+                log.warn(ctx.channel().remoteAddress() + "Radar 77G : A decoding error occurred in the received HTTP request");
+                throw new RuntimeException("接收到的HTTP请求发生解码错误");
+                //return;
             }
             //请求URI
             String uri = request.uri();
             String[] uriParameter = uri.split("/");
             if (uriParameter.length < 3) {
-                log.warn("Radar 77G : The fileNames' length less than 3! Uri=" + uri);
+                //log.warn("Radar 77G : The fileNames' length less than 3! Uri=" + uri);
                 return;
             }
             //77G雷达可以从URI获取设备sn号
             String sn = uriParameter[2];
+            //添加雷达配置映射信息
+            addRadarConfigMap(sn, ctx);
+
             //请求体内容
-            ByteBuf contentBuf = request.content();
+            contentBuf = request.content();
             byte[] contentArr = new byte[contentBuf.readableBytes()];
             contentBuf.getBytes(contentBuf.readerIndex(), contentArr);
             StringBuilder content = new StringBuilder(byteArrayToHexString(contentArr));
@@ -108,6 +113,9 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
             }
         }finally {
             ReferenceCountUtil.release(msg);
+            if (null != contentBuf){
+                contentBuf.clear();
+            }
         }
     }
 
@@ -118,7 +126,7 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
      */
     private void parseOneFrame(String frame, String sn){
         if ((FRAME_HEADER_LENGTH_IN_BYTES << 1) > frame.length()) {
-            log.warn("Radar 77G : The length of the data part of the frame is wrong, this data analysis failed and skipped(1)!");
+            //log.warn("Radar 77G : The length of the data part of the frame is wrong, this data analysis failed and skipped(1)!");
             return;
         }
         //处理帧头
@@ -132,7 +140,8 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
         String frameData = frame.substring(frameOffset);
         //数据长度效验
         if (dataLength <= 0 || dataLength << 1 != frameData.length()){
-            log.warn("Radar 77G : The length of the data part of the frame is wrong, this data analysis failed and skipped(2)!");
+            //log.info("{HeartBeat dataType: Radar_77G, sn: {}}", sn);
+            //log.warn("Radar 77G : The length of the data part of the frame is wrong, this data analysis failed and skipped(2)!");
             return;
         }
         //该帧包含的tlv个数
@@ -190,6 +199,7 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
                     try {
                         //处理目标点，一个tlv包含多个目标点
                         int targetCount = valueLength / TARGET_LENGTH_IN_BYTES;
+                        int subzoneCount = 0;
                         for (int j = 0; j < targetCount; j++) {
                             //解析一个目标点
                             Containers.Container targetStruct = MmWave77.targetStruct2D.parse(
@@ -208,8 +218,16 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
                                     target.put(key, value);
                                 }
                             });
-                            //添加到目标点list
-                            targetList.add(target);
+                            //log.info("{posX : {}}", target.get("posX").toString());
+                            //目标点的框在x:[-1.5,1.5], y:[0.8,1.7]范围
+                            if(-1.5 < Double.parseDouble(target.get("posX").toString()) && 1.5 > Double.parseDouble(target.get("posX").toString()) &&
+                                    0.8 < Double.parseDouble(target.get("posY").toString()) && 1.7 > Double.parseDouble(target.get("posY").toString())){
+                                //添加到目标点list
+                                targetList.add(target);
+                            }else{
+                                log.info("Radar 77G : Out of boundary of Box");
+                            }
+
                             offset += (TARGET_LENGTH_IN_BYTES << 1);
                         }
                         //数据封装
@@ -217,9 +235,8 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
                         result.put("sn", sn);
                         result.put("data", targetList);
                         if(PeopleCountServiceImpl.ON_START == 1) {
-                            peopleCountService.insertData2List(new PeopleCount(targetCount,PeopleCountServiceImpl.START_TIME,sn, LocalDateTime.now()));
+                            peopleCountService.insertData2List(new PeopleCount(targetList.size(),PeopleCountServiceImpl.START_TIME,sn, LocalDateTime.now()));
                         }
-
                         //发送
                         if (callback != null){
                             JSONObject jsonResult = new JSONObject(result);
@@ -235,5 +252,24 @@ public class Radar77gDataHandlerImpl extends ChannelInboundHandlerAdapter implem
                     break;
             }
         }
+    }
+
+    private void addRadarConfigMap(String sn, ChannelHandlerContext channelHandlerContext){
+        radarConfigMap.put(sn, channelHandlerContext);
+    }
+    /**
+     * 出现异常的处理
+     *
+     * @param channelHandlerContext
+     * @param cause
+     * @throws Exception
+     */
+    @Override
+    public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable cause) throws Exception {
+        cause.printStackTrace();
+        log.info(cause.getMessage());
+        Collection<ChannelHandlerContext> radarConfigMapValues = radarConfigMap.values();
+        radarConfigMapValues.remove(channelHandlerContext);
+        channelHandlerContext.close();
     }
 }
