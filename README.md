@@ -9,7 +9,7 @@
 
 # 流程图
 
-![radarSDK](G:\Spring Family\radar-sdk\README.assets\radarSDK.jpg)
+![radarSDK](./radarSDK.jpg)
 
 # 快速开始
 
